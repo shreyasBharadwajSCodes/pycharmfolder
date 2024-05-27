@@ -1,0 +1,141 @@
+import pandas as pd
+import numpy as np
+import random
+
+
+class LoadModel:
+    def __init__(self, load_name, current_demand, previous_demand, recovery_time):
+        self.load_name = load_name
+        self.current_demand = current_demand
+        self.previous_demand = previous_demand
+        self.recovery_time = recovery_time
+
+
+class LoadProfileGenerator:
+    def __init__(self, input_file, num_loads):
+        self.input_file = input_file
+        self.num_loads = num_loads
+        self.load_data()
+
+    def load_data(self):
+        # Read the input file containing dates and hourly demand values
+        df = pd.read_csv(self.input_file)
+
+        # Initialize load models list and breakdown dictionary
+        self.load_models = []
+        self.breakdown_info = {}
+
+        # Randomly select two dates for each load and create current/previous demand profiles
+        for load_num in range(1, self.num_loads + 1):
+            load_dates = random.sample(df['Datetime'].str.split().str[0].unique().tolist(),
+                                       2)  # Select two random dates
+            current_demand = df[df['Datetime'].str.split().str[0] == load_dates[0]]['Demand'].values
+            previous_demand = df[df['Datetime'].str.split().str[0] == load_dates[1]]['Demand'].values
+
+            # Extrapolate hourly demand to minute-by-minute data using np.repeat
+            current_demand = np.repeat(current_demand, 60).tolist()  # Repeat each hourly demand value for 60 minutes
+            previous_demand = np.repeat(previous_demand, 60).tolist()  # Repeat each hourly demand value for 60 minutes
+
+            current_demand.append(current_demand[-1])
+            previous_demand.append(previous_demand[-1])
+
+            # Create LoadModel instance for each load
+            load_name = f'Load_{load_num}'
+            recovery_time = random.randint(30, 120)  # Random recovery time
+            load_model = LoadModel(load_name, current_demand, previous_demand, recovery_time)
+
+            # Add load model to the list
+            self.load_models.append(load_model)
+
+            # Generate breakdown information
+            breakdown_prob = random.uniform(0.01, 0.03)
+            breakdown_timestep = random.randint(1, 1441)
+            self.breakdown_info[load_name] = {
+                'Breakdown Probability': breakdown_prob,
+                'Breakdown Timestep': breakdown_timestep
+            }
+
+        # Shift demand when a load enters breakdown
+        self.shift_demand_on_breakdown()
+
+        # Store the load profiles in an Excel file
+        self.store_profiles_to_excel()
+
+    def shift_demand_on_breakdown(self):
+        # Iterate over load models and shift demand when breakdown occurs
+        for load_model in self.load_models:
+            if random.random() <= self.breakdown_info[load_model.load_name]['Breakdown Probability']:
+                # Determine the timestep when breakdown occurs
+                breakdown_timestep = self.breakdown_info[load_model.load_name]['Breakdown Timestep']
+
+                # Shift demand to the next window of size recovery_time in current_demand
+                recovery_time = load_model.recovery_time
+                load_model.current_demand[breakdown_timestep:breakdown_timestep + recovery_time] = \
+                    load_model.current_demand[breakdown_timestep:breakdown_timestep + recovery_time] + \
+                    load_model.current_demand[:recovery_time]
+    def store_profiles_to_excel(self):
+        # Initialize lists to store load data
+        load_names = []
+        time_steps = []
+        current_demands = []
+        previous_demands = []
+
+        for load_model in self.load_models:
+            # Repeat load name for each time step
+            load_names.extend([load_model.load_name] * 1441)
+
+            # Append time steps
+            time_steps.extend(range(1, 1442))
+
+            # Append current demand for the load
+            current_demands.append(load_model.current_demand)
+
+            # Append previous demand for the load
+            previous_demands.append(load_model.previous_demand)
+
+        # Flatten the lists of demands
+        current_demands = [item for sublist in current_demands for item in sublist]
+        previous_demands = [item for sublist in previous_demands for item in sublist]
+
+        # Check if all arrays have the same length
+        if len(load_names) != len(time_steps) or len(load_names) != len(current_demands) or len(load_names) != len(
+                previous_demands):
+            print(len(load_names), len(time_steps), len(current_demands), len(previous_demands))
+            raise ValueError("All arrays must be of the same length")
+
+        # Create DataFrame from the lists
+        self.df = pd.DataFrame({
+            'Load Name': load_names,
+            'Time Step': time_steps,
+            'Current Demand': current_demands,
+            'Previous Demand': previous_demands
+        })
+
+        # Save the DataFrame to an Excel file
+        file_name = 'load_profiles.xlsx'
+        self.df.to_excel(file_name, index=False)
+        print(f"Load profiles saved to {file_name}")
+
+    def get_load_data(self):
+        # Return DataFrame and breakdown information dictionary
+        return [self.df, self.breakdown_info]
+
+
+input_file = "../../data/EKPC_hourly.csv"  # Path to your CSV file with datetime and demand values
+num_loads = 3  # Number of loads to simulate
+generator = LoadProfileGenerator(input_file, num_loads)
+load_data = generator.get_load_data()
+
+df = load_data[0]
+breakdown_info = load_data[1]
+
+# Access individual load models
+print("Load Profiles DataFrame:")
+print(df.head())
+print()
+print("Breakdown Information:")
+for load_name, info in breakdown_info.items():
+    print(f"{load_name}:")
+    for key, value in info.items():
+        print(f"{key}: {value}")
+    print()

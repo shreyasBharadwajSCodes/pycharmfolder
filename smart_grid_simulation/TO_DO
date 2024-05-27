@@ -1,0 +1,15 @@
+#TO-DO :
+    * Move some methods to utils , make it easier , store files in right paths
+    * Give better file names
+
+    * Make a single df for all
+    * Make a basic RL , SA approach , what must be the actions like etc.
+    * Use the details available in the df and the models
+
+
+Few mistakes : Where is battery getting its energy from when it is charging ?
+CHP utilization always shows 0 , Public grid shot up & it is supposed to be close to 0 ,
+there are times when the demand is not being met
+
+smart_grid_system = SmartGridSystem('../../data/load_details/simulation_file_20240523_150402.xlsx',
+                                    '../../data/solar_generated_02-02-2024_10_0.15.xlsx', 0.1)

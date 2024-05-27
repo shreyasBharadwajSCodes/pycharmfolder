@@ -1,0 +1,70 @@
+import random
+
+class RateManager:
+    def __init__(self, demand_profile, min_rate, max_rate, high_threshold=70, low_threshold=30):
+        self.demand_profile = demand_profile
+        self.min_rate = min_rate
+        self.max_rate = max_rate
+        self.high_threshold = high_threshold
+        self.low_threshold = low_threshold
+        self.current_rate = None  # No initial rate set
+
+    def generate_rate(self, current_minute):
+        # Check if demand is within thresholds
+        demand = self.demand_profile[current_minute]
+        if demand > self.high_threshold:
+            # Set rate to max if demand is higher than the high threshold
+            self.current_rate = self.max_rate
+        elif demand < self.low_threshold:
+            # Set rate to min if demand is lower than the low threshold
+            self.current_rate = self.min_rate
+        else:
+            # Generate a random rate within the range for in-between demand
+            self.current_rate = random.uniform(self.min_rate, self.max_rate)
+
+        # Print the generated rate for debugging purposes
+        print(f"Generated rate at minute {current_minute}: {self.current_rate}")
+        return self.current_rate
+
+class ElectricMarket:
+    def __init__(self, demand_profile, min_rate=5, max_rate=15, high_threshold=70, low_threshold=30):
+        self.current_minute = 0
+        num_intervals = len(demand_profile)  # Number of minutes in a day
+        self.purchased_units = [0] * num_intervals  # Initialize purchased units list
+        self.demand_profile = demand_profile
+        self.rate_manager = RateManager(self.demand_profile, min_rate, max_rate, high_threshold, low_threshold)
+
+    def electric_market_step(self):
+        # Simulate minute-by-minute operation
+        if self.current_minute < len(self.demand_profile):  # Check if current_minute is within range
+            self.adjust_rate()
+            self.current_minute += 1
+            self.make_purchase()
+            self.print_purchased_at_current_step()
+
+    def adjust_rate(self):
+        # Adjust rate based on demand every 15 minutes
+        if self.current_minute % 15 == 0:
+            self.rate_manager.generate_rate(self.current_minute)
+
+    def make_purchase(self):
+        # Perform the purchase action based on the current rate
+        if self.current_minute < len(self.demand_profile):  # Check if current_minute is within range
+            cost = self.rate_manager.current_rate  # Using the current rate from RateManager
+            self.purchased_units[self.current_minute] += cost
+
+    def print_purchased_at_current_step(self):
+        # Print the purchased units and cost for the current minute
+        if self.current_minute < len(self.demand_profile):  # Check if current_minute is within range
+            purchased_units = self.purchased_units[self.current_minute]
+            cost = purchased_units * self.rate_manager.current_rate
+            print(f"Minute {self.current_minute}: Electricity output - {purchased_units}, Cost - {cost}")
+
+# Example usage:
+# Generate a random demand profile for the previous day (minute by minute)
+previous_day_demand_profile = [random.randint(0, 100) for _ in range(24 * 60)]
+
+electric_market = ElectricMarket(previous_day_demand_profile, min_rate=5, max_rate=15, high_threshold=70, low_threshold=30)
+
+for _ in range(24*60):
+    electric_market.electric_market_step()
