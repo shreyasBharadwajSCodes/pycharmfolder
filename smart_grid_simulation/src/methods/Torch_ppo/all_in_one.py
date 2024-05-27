@@ -347,6 +347,8 @@ def test_model_on_multiple_datasets(agent1, agent2, datasets, solarcost_kwh):
         }
     return results
 
+import matplotlib.pyplot as plt
+
 def plot_results(results):
     for dataset_name, data in results.items():
         utilization_data = data['utilization_data']
@@ -445,26 +447,66 @@ def plot_results(results):
         plt.tight_layout()
         plt.show()
 
+        # Plot utilization graphs for units consumed separately
+        plt.figure(figsize=(14, 10))
+
+        plt.subplot(3, 2, 1)
+        battery_units = [utilization['battery'][0] for utilization in utilization_data]
+        plt.plot(time_steps, battery_units, label='Battery Units', color='yellow')
+        plt.xlabel('Time Step')
+        plt.ylabel('Battery Units')
+        plt.title(f'Battery Units Consumed over Time - {dataset_name}')
+        plt.legend()
+
+        plt.subplot(3, 2, 2)
+        chp_units = [utilization['chp'][0] for utilization in utilization_data]
+        plt.plot(time_steps, chp_units, label='CHP Units', color='orange')
+        plt.xlabel('Time Step')
+        plt.ylabel('CHP Units')
+        plt.title(f'CHP Units Consumed over Time - {dataset_name}')
+        plt.legend()
+
+        plt.subplot(3, 2, 3)
+        em_units = [utilization['electric_market']['electricity_output'] for utilization in utilization_data]
+        plt.plot(time_steps, em_units, label='Electric Market Units', color='cyan')
+        plt.xlabel('Time Step')
+        plt.ylabel('Electric Market Units')
+        plt.title(f'Electric Market Units Consumed over Time - {dataset_name}')
+        plt.legend()
+
+        plt.subplot(3, 2, 4)
+        pg_units = [utilization['public_grid'][0] for utilization in utilization_data]
+        plt.plot(time_steps, pg_units, label='Public Grid Units', color='purple')
+        plt.xlabel('Time Step')
+        plt.ylabel('Public Grid Units')
+        plt.title(f'Public Grid Units Consumed over Time - {dataset_name}')
+        plt.legend()
+
+        plt.subplot(3, 2, 5)
+        prior_purchased_units = [utilization['prior_purchased'] for utilization in utilization_data]
+        plt.plot(time_steps, prior_purchased_units, label='Prior Purchased Units', color='pink')
+        plt.xlabel('Time Step')
+        plt.ylabel('Prior Purchased Units')
+        plt.title(f'Prior Purchased Units Consumed over Time - {dataset_name}')
+        plt.legend()
+
+        plt.subplot(3, 2, 6)
+        solar_units = [utilization['solar_output'] for utilization in utilization_data]
+        plt.plot(time_steps, solar_units, label='Solar Output Units', color='lightgreen')
+        plt.xlabel('Time Step')
+        plt.ylabel('Solar Output Units')
+        plt.title(f'Solar Output Units Consumed over Time - {dataset_name}')
+        plt.legend()
+
+        plt.tight_layout()
+        plt.show()
+
 
 def save_model(agent, filepath):
-    """
-    Save the model parameters to a file.
-
-    Args:
-        agent: The PPO agent whose model parameters need to be saved.
-        filepath: The file path where the model parameters will be saved.
-    """
     torch.save(agent.policy_net.state_dict(), filepath)
 
 
 def load_model(agent, filepath):
-    """
-    Load the model parameters from a file.
-
-    Args:
-        agent: The PPO agent whose model parameters need to be loaded.
-        filepath: The file path from where the model parameters will be loaded.
-    """
     agent.policy_net.load_state_dict(torch.load(filepath))
     agent.policy_net.eval()  # Set the model to evaluation mode
 
