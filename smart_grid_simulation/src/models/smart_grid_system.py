@@ -10,7 +10,7 @@ class SmartGridSystem:
     def __init__(self, sim_file, solar_file, solarcost_kwh):
         self.time_step = 0
         self.get_preprocessed_df(sim_file, solar_file, solarcost_kwh)
-        self.battery = BatteryModel(capacity_kwh=10, max_charge_rate=5, max_discharge_rate=5,initial_soc=0.5)
+        self.battery = BatteryModel(capacity_kwh=10, max_charge_rate=5, max_discharge_rate=5,initial_soc=0.5,charge_efficiency=0.8,discharge_efficiency=0.9)
         self.chp = CHPModel()
         self.rm = RateManager(previous_demand=self.final_df['Total_previous_demand'], base_rate=5)
         self.rate_df = self.rm.generate_rates()

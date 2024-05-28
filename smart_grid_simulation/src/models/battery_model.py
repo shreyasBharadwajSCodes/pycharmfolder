@@ -12,6 +12,7 @@ class BatteryModel:
         if mode not in ['idle', 'charge', 'discharge']:
             raise ValueError("Invalid mode for battery.")
         self.mode = mode
+        print(f"Battery mode set to: {self.mode}")
 
     def charge(self, available_energy):
         if self.mode == 'charge':
@@ -19,14 +20,18 @@ class BatteryModel:
                                 (self.capacity_kwh - self.soc) / self.charge_efficiency)
             self.soc = min(self.soc + charge_energy * self.charge_efficiency,
                            self.capacity_kwh)  # Ensure SOC doesn't exceed capacity
+            print(f"Charging battery: {charge_energy} kWh, SOC: {self.soc} kWh")
             return charge_energy
+        print("Battery is not in charge mode.")
         return 0
 
     def discharge(self, demand_left):
         if self.mode == 'discharge':
             discharge_energy = min(self.max_discharge_rate, self.soc, demand_left / self.discharge_efficiency)
             self.soc = max(self.soc - discharge_energy, 0)  # Ensure SOC doesn't fall below 0
+            print(f"Discharging battery: {discharge_energy * self.discharge_efficiency} kWh, SOC: {self.soc} kWh")
             return discharge_energy * self.discharge_efficiency
+        print("Battery is not in discharge mode.")
         return 0
 
     def get_cost(self):
@@ -38,3 +43,4 @@ class BatteryModel:
     def reset(self):
         self.soc = 0.5 * self.capacity_kwh
         self.mode = 'idle'
+        print("Battery reset: SOC set to 50%")
