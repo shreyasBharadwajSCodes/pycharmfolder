@@ -1,5 +1,5 @@
 class BatteryModel:
-    def __init__(self, capacity_kwh, max_charge_rate, max_discharge_rate, charge_efficiency=1, discharge_efficiency=1, initial_soc=0.5):
+    def __init__(self, capacity_kwh, max_charge_rate, max_discharge_rate, charge_efficiency, discharge_efficiency, initial_soc=0.5):
         self.capacity_kwh = capacity_kwh
         self.max_charge_rate = max_charge_rate
         self.max_discharge_rate = max_discharge_rate
@@ -15,16 +15,18 @@ class BatteryModel:
 
     def charge(self, available_energy):
         if self.mode == 'charge':
-            charge_energy = min(available_energy, self.max_charge_rate, (self.capacity_kwh - self.soc) / self.charge_efficiency)
-            self.soc += charge_energy * self.charge_efficiency
+            charge_energy = min(available_energy, self.max_charge_rate,
+                                (self.capacity_kwh - self.soc) / self.charge_efficiency)
+            self.soc = min(self.soc + charge_energy * self.charge_efficiency,
+                           self.capacity_kwh)  # Ensure SOC doesn't exceed capacity
             return charge_energy
         return 0
 
-    def discharge(self):
+    def discharge(self, demand_left):
         if self.mode == 'discharge':
-            discharge_energy = min(self.max_discharge_rate, self.soc)
-            self.soc -= discharge_energy / self.discharge_efficiency
-            return discharge_energy
+            discharge_energy = min(self.max_discharge_rate, self.soc, demand_left / self.discharge_efficiency)
+            self.soc = max(self.soc - discharge_energy, 0)  # Ensure SOC doesn't fall below 0
+            return discharge_energy * self.discharge_efficiency
         return 0
 
     def get_cost(self):

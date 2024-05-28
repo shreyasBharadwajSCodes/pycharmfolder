@@ -599,7 +599,6 @@ def load_model(agent, filepath):
     agent.policy_net.eval()  # Set the model to evaluation mode
 
 
-# Save the model
 # Save the models
 save_model(battery_agent, 'battery_agent.pth')
 save_model(solar_agent, 'solar_agent.pth')
