@@ -1,6 +1,6 @@
 import pandas as pd
 import math
-from collections import defaultdict
+from collections import deque
 
 from models.smart_grid_system import SmartGridSystem
 
@@ -67,12 +67,18 @@ def possible_actions(smart_grid_system, state):
 
 # Iterative function for optimal cost calculation
 def optimal_cost(smart_grid_system, initial_state):
-    state_queue = [(initial_state, [])]
+    state_queue = deque([(initial_state, [])])
     min_cost = float('inf')
     best_actions = []
 
+    iteration = 0
     while state_queue:
-        current_state, actions_taken = state_queue.pop(0)
+        current_state, actions_taken = state_queue.popleft()
+        if current_state['time step'] % 60 == 0:  # Log every hour
+            print(
+                f"Iteration {iteration}: Time Step {current_state['time step']} - Current Cost: {current_state['total_cost']}")
+        iteration += 1
+
         if current_state['time step'] >= 24 * 60:  # End of the 24-hour period
             current_cost = current_state['total_cost']
             if current_cost < min_cost:
@@ -87,7 +93,7 @@ def optimal_cost(smart_grid_system, initial_state):
     return min_cost, best_actions
 
 
-# Example usage
+
 if __name__ == "__main__":
     # Initialize the system
     smart_grid_system = SmartGridSystem(sim_file=r'../../data/load_details/simulation_file_20240523_150250.xlsx',
@@ -96,7 +102,9 @@ if __name__ == "__main__":
     smart_grid_system.rate_df = rate_df
     initial_state = smart_grid_system.get_state()
     initial_state['total_cost'] = 0
-    cost, optimal_actions = optimal_cost(smart_grid_system, initial_state)
 
+    print("Starting optimization...")
+    cost, optimal_actions = optimal_cost(smart_grid_system, initial_state)
+    print("Optimization complete.")
     print("Optimal Cost:", cost)
     print("Optimal Actions:", optimal_actions)
