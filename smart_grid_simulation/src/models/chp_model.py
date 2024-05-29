@@ -1,5 +1,5 @@
 class CHPModel:
-    def __init__(self, min_operational_value=3, max_operational_value=20, cost_per_kwh_electricity=5):
+    def __init__(self, min_operational_value=5, max_operational_value=9, cost_per_kwh_electricity=2):
         self.min_operational_value = min_operational_value
         self.max_operational_value = max_operational_value
         self.cost_per_kwh_electricity = cost_per_kwh_electricity

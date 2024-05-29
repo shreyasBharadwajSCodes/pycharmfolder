@@ -20,8 +20,9 @@ class BatteryModel:
             return charge_energy
         return 0
 
-    def discharge(self):
-        if self.mode == 'discharge':
+    def discharge(self,is_zero = 0):
+        if is_zero: return 0
+        if self.mode == 'discharge' and self.soc > 0:
             discharge_energy = min(self.max_discharge_rate, self.soc)
             self.soc -= discharge_energy / self.discharge_efficiency
             return discharge_energy

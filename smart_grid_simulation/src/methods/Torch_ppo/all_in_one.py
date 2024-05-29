@@ -2,7 +2,6 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import numpy as np
-from matplotlib import pyplot as plt
 
 from models.smart_grid_system import SmartGridSystem
 
@@ -101,10 +100,12 @@ class CustomSmartGridEnv:
     def __init__(self, smart_grid_system):
         self.smart_grid_system = smart_grid_system
         self.time_step = 0
+        self.previous_demand = 0  # Initialize previous demand
 
     def reset(self):
         self.smart_grid_system.reset()
         self.time_step = 0
+        self.previous_demand = 0  # Reset previous demand
         return self._get_state()
 
     def step(self, battery_action, solar_action, chp_action, market_action):
@@ -138,10 +139,15 @@ class CustomSmartGridEnv:
         reward = -(costs + penalties)
 
         reward += self._calculate_market_reward(market_action_value)
+        reward += self._calculate_solar_reward()  # Additional reward for using solar energy
 
         print(f"Timestep: {self.time_step}")
-        print(f"Battery Action: {battery_action}, Solar Action: {solar_action}, CHP Action: {chp_action_value}, Market Action: {market_action_value}")
+        print(
+            f"Battery Action: {battery_action}, Solar Action: {solar_action}, CHP Action: {chp_action_value}, Market Action: {market_action_value}")
         print(f"Costs: {costs}, Penalties: {penalties}, Reward: {reward}")
+
+        # Update previous demand
+        self.previous_demand = self.smart_grid_system.final_df['Total_current_demand'].iloc[min(self.time_step, len(self.smart_grid_system.final_df) - 1)]
 
         self.time_step += 1
         done = self.time_step >= len(self.smart_grid_system.final_df)
@@ -158,51 +164,76 @@ class CustomSmartGridEnv:
                 self.smart_grid_system.solar_model.get_state(self.time_step)[0],
                 self.smart_grid_system.chp.current_output,
                 self.smart_grid_system.ppm.get_state(self.time_step),
-                self.smart_grid_system.em.get_purchased_units()[self.time_step // 15 if self.time_step // 15 < len(self.smart_grid_system.em.get_purchased_units()) else len(self.smart_grid_system.em.get_purchased_units()) - 1]
+                self.smart_grid_system.em.get_purchased_units()[self.time_step // 15 if self.time_step // 15 < len(
+                    self.smart_grid_system.em.get_purchased_units()) else len(
+                    self.smart_grid_system.em.get_purchased_units()) - 1]
             ])
             self.smart_grid_system.battery.charge(available_energy)
         elif action == 2:
             self.smart_grid_system.battery.set_mode("discharge")
-            total_demand = self.smart_grid_system.final_df['Total_current_demand'].iloc[min(self.time_step, len(self.smart_grid_system.final_df) - 1)]
+            total_demand = self.smart_grid_system.final_df['Total_current_demand'].iloc[
+                min(self.time_step, len(self.smart_grid_system.final_df) - 1)]
             supplied_energy = sum([
                 self.smart_grid_system.chp.current_output,
                 self.smart_grid_system.solar_model.get_state(self.time_step)[0],
                 self.smart_grid_system.ppm.get_state(self.time_step),
-                self.smart_grid_system.em.get_purchased_units()[self.time_step // 15 if self.time_step // 15 < len(self.smart_grid_system.em.get_purchased_units()) else len(self.smart_grid_system.em.get_purchased_units()) - 1]
+                self.smart_grid_system.em.get_purchased_units()[self.time_step // 15 if self.time_step // 15 < len(
+                    self.smart_grid_system.em.get_purchased_units()) else len(
+                    self.smart_grid_system.em.get_purchased_units()) - 1]
             ])
             demand_left = total_demand - supplied_energy
-            self.smart_grid_system.battery.discharge(demand_left)
+            if demand_left > 0:
+                self.smart_grid_system.battery.discharge()
+            else:
+                self.smart_grid_system.battery.discharge(0)  # to avoid excess discharge
 
     def _apply_solar_action(self, action):
         if action == 0:
             self.smart_grid_system.solar_model.set_mode("off")
         elif action == 1:
             self.smart_grid_system.solar_model.set_mode("on")
+        print(f"Solar Action: {action}")
 
     def _apply_chp_action(self, action):
         self.smart_grid_system.chp.set_output(action)
+        print(f"CHP Action: {action}")
 
     def _apply_market_purchase_action(self, action):
         if 6 <= self.time_step % 15 <= 9:
             units = max(0, action)
             self.smart_grid_system.em.make_purchase(units)
+            print(f"Market Purchase Action: {units}")
 
     def _calculate_costs(self):
         timestep = min(self.time_step, len(self.smart_grid_system.final_df) - 1)
         battery_cost = self.smart_grid_system.battery.get_cost()
         chp_cost = self.smart_grid_system.chp.calculate_cost_at_current_step()
         market_cost = self.smart_grid_system.em.get_price(timestep) * self.smart_grid_system.em.get_purchased_units()[
-            timestep // 15 if timestep // 15 < len(self.smart_grid_system.em.get_purchased_units()) else len(self.smart_grid_system.em.get_purchased_units()) - 1]
+            timestep // 15 if timestep // 15 < len(self.smart_grid_system.em.get_purchased_units()) else len(
+                self.smart_grid_system.em.get_purchased_units()) - 1]
         prior_purchased_cost = self.smart_grid_system.ppm.get_price(self.smart_grid_system.ppm.get_state(timestep))
         solar_cost = self.smart_grid_system.solar_model.calculate_cost_at_timestep(timestep)
-        public_grid_cost = self.smart_grid_system.pg.get_price(self.smart_grid_system.final_df['Total_current_demand'].iloc[timestep], sum([
+
+        # Public Grid Cost adjustment
+        public_grid_usage = self.smart_grid_system.final_df['Total_current_demand'].iloc[timestep] - sum([
             self.smart_grid_system.battery.get_state()[0],
             self.smart_grid_system.chp.current_output,
             self.smart_grid_system.solar_model.get_state(timestep)[0],
             self.smart_grid_system.ppm.get_state(timestep),
-            self.smart_grid_system.em.get_purchased_units()[timestep // 15 if timestep // 15 < len(self.smart_grid_system.em.get_purchased_units()) else len(self.smart_grid_system.em.get_purchased_units()) - 1]
-        ]))
-        return battery_cost + chp_cost + market_cost + prior_purchased_cost + solar_cost + public_grid_cost
+            self.smart_grid_system.em.get_purchased_units()[
+                timestep // 15 if timestep // 15 < len(self.smart_grid_system.em.get_purchased_units()) else len(
+                    self.smart_grid_system.em.get_purchased_units()) - 1]
+        ])
+
+        if public_grid_usage < 0.02 * self.smart_grid_system.final_df['Total_current_demand'].iloc[timestep]:
+            public_grid_cost = 0.01 * public_grid_usage  # very low cost
+        else:
+            public_grid_cost = self.smart_grid_system.pg.get_price(
+                self.smart_grid_system.final_df['Total_current_demand'].iloc[timestep], public_grid_usage)
+
+        total_cost = battery_cost + chp_cost + market_cost + prior_purchased_cost + solar_cost + public_grid_cost
+        print(f"Total Costs: {total_cost}")
+        return total_cost
 
     def _calculate_penalties(self):
         penalty = 0
@@ -213,24 +244,36 @@ class CustomSmartGridEnv:
             self.smart_grid_system.chp.current_output,
             self.smart_grid_system.solar_model.get_state(timestep)[0],
             self.smart_grid_system.ppm.get_state(timestep),
-            self.smart_grid_system.em.get_purchased_units()[timestep // 15 if timestep // 15 < len(self.smart_grid_system.em.get_purchased_units()) else len(self.smart_grid_system.em.get_purchased_units()) - 1]
+            self.smart_grid_system.em.get_purchased_units()[
+                timestep // 15 if timestep // 15 < len(self.smart_grid_system.em.get_purchased_units()) else len(
+                    self.smart_grid_system.em.get_purchased_units()) - 1]
         ])
 
         demand_left = total_demand - supplied_energy
         if demand_left > 0:
-            penalty += demand_left * 200
+            penalty += demand_left * 100  # reduced penalty
         if supplied_energy > total_demand:
-            penalty += (supplied_energy - total_demand) * 50
+            penalty += (supplied_energy - total_demand) * 25  # reduced penalty
 
         if demand_left > 0 and supplied_energy < total_demand:
-            penalty += 5000
+            penalty += 1000  # reduced penalty
 
+        # Adjust penalty for public grid
+        public_grid_usage = total_demand - supplied_energy
+        if public_grid_usage > 0.02 * total_demand:
+            penalty += 500  # larger penalty if above threshold
+
+        print(f"Total Penalties: {penalty}")
         return penalty
 
+    def _calculate_solar_reward(self):
+        solar_output = self.smart_grid_system.solar_model.get_state(self.time_step)[0]
+        return solar_output * 10  # specific reward for solar usage
+
     def _calculate_market_reward(self, market_action_value):
-        if market_action_value > 0:
-            return market_action_value * 10
-        return 0
+        market_reward = market_action_value * 10 if market_action_value > 0 else 0
+        print(f"Market Reward: {market_reward}")
+        return market_reward
 
     def _get_state(self):
         state = self.smart_grid_system.get_state()
@@ -243,49 +286,56 @@ class CustomSmartGridEnv:
         flat_state.append(state['prior purchased'])
         flat_state.append(state['solar'])
         flat_state.extend(state['DF'].values())
+        flat_state.append(self.time_step)  # Add current timestep to the state
+        flat_state.append(self.previous_demand)  # Add previous demand to the state
         flat_state = [float(x) if isinstance(x, (int, float)) else 0 for x in flat_state]
         return np.array(flat_state)
 
-def train_ppo(env, agent1, agent2, num_episodes, max_timesteps):
+def train_ppo(env, battery_agent, solar_agent, chp_market_agent, num_episodes, max_timesteps):
+    battery_action_counts = {0: 0, 1: 0, 2: 0}  # Track battery action distribution
     for episode in range(num_episodes):
         state = env.reset()
         state = torch.FloatTensor(state).unsqueeze(0)
         episode_reward = 0
         for t in range(max_timesteps):
-            battery_action, log_prob1, value1 = agent1.select_action(state)
-            solar_action, log_prob2, value2 = agent1.select_action(state)
-            chp_action, log_prob3, value3 = agent2.select_action(state)
-            market_action, log_prob4, value4 = agent2.select_action(state)
+            battery_action, log_prob1, value1 = battery_agent.select_action(state)
+            solar_action, log_prob2, value2 = solar_agent.select_action(state)
+            chp_action, log_prob3, value3 = chp_market_agent.select_action(state)
+            market_action, log_prob4, value4 = chp_market_agent.select_action(state)
             next_state, reward, done = env.step(battery_action, solar_action, chp_action, market_action)
             next_state = torch.FloatTensor(next_state).unsqueeze(0)
             episode_reward += reward
-            agent1.log_probs.append(log_prob1)
-            agent1.values.append(value1)
-            agent1.rewards.append(reward)
-            agent1.masks.append(1 - done)
-            agent1.log_probs.append(log_prob2)
-            agent1.values.append(value2)
-            agent1.rewards.append(reward)
-            agent1.masks.append(1 - done)
-            agent2.log_probs.append(log_prob3)
-            agent2.values.append(value3)
-            agent2.rewards.append(reward)
-            agent2.masks.append(1 - done)
-            agent2.log_probs.append(log_prob4)
-            agent2.values.append(value4)
-            agent2.rewards.append(reward)
-            agent2.masks.append(1 - done)
+            battery_agent.log_probs.append(log_prob1)
+            battery_agent.values.append(value1)
+            battery_agent.rewards.append(reward)
+            battery_agent.masks.append(1 - done)
+            solar_agent.log_probs.append(log_prob2)
+            solar_agent.values.append(value2)
+            solar_agent.rewards.append(reward)
+            solar_agent.masks.append(1 - done)
+            chp_market_agent.log_probs.append(log_prob3)
+            chp_market_agent.values.append(value3)
+            chp_market_agent.rewards.append(reward)
+            chp_market_agent.masks.append(1 - done)
+            chp_market_agent.log_probs.append(log_prob4)
+            chp_market_agent.values.append(value4)
+            chp_market_agent.rewards.append(reward)
+            chp_market_agent.masks.append(1 - done)
             state = next_state
+            battery_action_counts[battery_action] += 1  # Count battery actions
             if done:
                 break
-        agent1.update()
-        agent2.update()
+        battery_agent.update()
+        solar_agent.update()
+        chp_market_agent.update()
         if episode % 10 == 0:
             print(f"Episode {episode}, Reward: {episode_reward}")
+            # Log the actions chosen by the agent
+            print(f"Battery Action Distribution: {battery_action_counts}")
 
-# Example usage
 datasets = [
-    {'name': 'Dataset1', 'sim_file': '../../../data/load_details/simulation_file_20240523_150402.xlsx', 'solar_file': '../../../data/solar_generated_02-02-2024_10_0.15.xlsx'},
+    {'name': 'Dataset1', 'sim_file': '../../../data/load_details/simulation_file_20240523_150402.xlsx',
+     'solar_file': '../../../data/solar_generated_02-02-2024_10_0.15.xlsx'},
     # Add more datasets as needed
 ]
 
@@ -293,21 +343,24 @@ datasets = [
 smart_grid_system = SmartGridSystem(datasets[0]['sim_file'], datasets[0]['solar_file'], 0.1)
 env = CustomSmartGridEnv(smart_grid_system)
 state_dim = len(env._get_state())
-discrete_action_dim = 2
+battery_action_dim = 3  # Three actions: idle, charge, discharge
+solar_action_dim = 2  # Two actions: off, on
 continuous_action_dim = 2
 lr = 1e-4
-gamma = 0.99
+gamma = 0.90
 epsilon = 0.2
-beta = 0.01
+beta = 0.02
 num_episodes = 10
 max_timesteps = 1441
-battery_solar_agent = PPOAgent(DiscretePolicyNetwork(state_dim, discrete_action_dim), lr, gamma, epsilon, beta)
+battery_agent = PPOAgent(DiscretePolicyNetwork(state_dim, battery_action_dim), lr, gamma, epsilon, beta)
+solar_agent = PPOAgent(DiscretePolicyNetwork(state_dim, solar_action_dim), lr, gamma, epsilon, beta)
 chp_market_agent = PPOAgent(ContinuousPolicyNetwork(state_dim, continuous_action_dim), lr, gamma, epsilon, beta)
 
 # Train the agents
-train_ppo(env, battery_solar_agent, chp_market_agent, num_episodes, max_timesteps)
+train_ppo(env, battery_agent, solar_agent, chp_market_agent, num_episodes, max_timesteps)
 
-def test_model_on_multiple_datasets(agent1, agent2, datasets, solarcost_kwh):
+
+def test_model_on_multiple_datasets(battery_agent, solar_agent, chp_market_agent, datasets, solarcost_kwh):
     results = {}
     for dataset in datasets:
         smart_grid_system = SmartGridSystem(dataset['sim_file'], dataset['solar_file'], solarcost_kwh)
@@ -321,10 +374,10 @@ def test_model_on_multiple_datasets(agent1, agent2, datasets, solarcost_kwh):
         penalty_data = []
         while not done:
             state = torch.FloatTensor(state).unsqueeze(0)
-            battery_action, _, _ = agent1.select_action(state)
-            solar_action, _, _ = agent1.select_action(state)
-            chp_action, _, _ = agent2.select_action(state)
-            market_action, _, _ = agent2.select_action(state)
+            battery_action, _, _ = battery_agent.select_action(state)
+            solar_action, _, _ = solar_agent.select_action(state)
+            chp_action, _, _ = chp_market_agent.select_action(state)
+            market_action, _, _ = chp_market_agent.select_action(state)
             state, reward, done = env.step(battery_action, solar_action, chp_action, market_action)
             total_reward += reward
             utilization_data.append({
@@ -335,7 +388,8 @@ def test_model_on_multiple_datasets(agent1, agent2, datasets, solarcost_kwh):
                 'prior_purchased': env.smart_grid_system.ppm.get_state(env.time_step),
                 'solar_output': env.smart_grid_system.solar_model.get_state(env.time_step)
             })
-            demand_met_data.append(env.smart_grid_system.final_df['Total_current_demand'].iloc[min(env.time_step, len(env.smart_grid_system.final_df) - 1)])
+            demand_met_data.append(env.smart_grid_system.final_df['Total_current_demand'].iloc[
+                                       min(env.time_step, len(env.smart_grid_system.final_df) - 1)])
             reward_data.append(reward)
             penalty_data.append(env._calculate_penalties())
         results[dataset['name']] = {
@@ -347,7 +401,9 @@ def test_model_on_multiple_datasets(agent1, agent2, datasets, solarcost_kwh):
         }
     return results
 
+
 import matplotlib.pyplot as plt
+
 
 def plot_results(results):
     for dataset_name, data in results.items():
@@ -360,12 +416,22 @@ def plot_results(results):
 
         plt.figure(figsize=(14, 8))
 
-        # Plot Demand Met
+        # Plot Percentage of Demand Satisfied by Sources Other Than Public Grid
+        percentage_demand_satisfied = [(sum([
+            utilization['battery'][0] if isinstance(utilization['battery'], list) else utilization['battery'],
+            utilization['chp'][0] if isinstance(utilization['chp'], list) else utilization['chp'],
+            utilization['electric_market']['electricity_output'] if isinstance(utilization['electric_market'],
+                                                                               dict) else utilization[
+                'electric_market'],
+            utilization['prior_purchased'] if isinstance(utilization['prior_purchased'], (int, float)) else 0,
+            utilization['solar_output'] if isinstance(utilization['solar_output'], (int, float)) else 0
+        ]) / demand_met_data[i]) * 100 for i, utilization in enumerate(utilization_data)]
         plt.subplot(2, 2, 1)
-        plt.plot(time_steps, demand_met_data, label='Demand Met', color='blue')
+        plt.plot(time_steps, percentage_demand_satisfied, label='% Demand Satisfied by Non-Public Grid Sources',
+                 color='blue')
         plt.xlabel('Time Step')
-        plt.ylabel('Demand Met')
-        plt.title(f'Demand Met over Time - {dataset_name}')
+        plt.ylabel('% Demand Satisfied')
+        plt.title(f'% Demand Satisfied by Non-Public Grid Sources - {dataset_name}')
         plt.legend()
 
         # Plot Reward
@@ -391,7 +457,13 @@ def plot_results(results):
         plt.figure(figsize=(14, 10))
 
         plt.subplot(3, 2, 1)
-        battery_utilization = [(utilization['battery'][0] / demand_met_data[i]) * 100 for i, utilization in enumerate(utilization_data)]
+        battery_utilization = [
+            (utilization['battery'][0] / demand_met_data[i]) * 100 if isinstance(utilization['battery'], list) else (
+                                                                                                                                utilization[
+                                                                                                                                    'battery'] /
+                                                                                                                                demand_met_data[
+                                                                                                                                    i]) * 100
+            for i, utilization in enumerate(utilization_data)]
         plt.plot(time_steps, battery_utilization, label='Battery', color='yellow')
         plt.ylim(0, 100)
         plt.xlabel('Time Step')
@@ -400,7 +472,13 @@ def plot_results(results):
         plt.legend()
 
         plt.subplot(3, 2, 2)
-        chp_utilization = [(utilization['chp'][0] / demand_met_data[i]) * 100 for i, utilization in enumerate(utilization_data)]
+        chp_utilization = [
+            (utilization['chp'][0] / demand_met_data[i]) * 100 if isinstance(utilization['chp'], list) else (
+                                                                                                                        utilization[
+                                                                                                                            'chp'] /
+                                                                                                                        demand_met_data[
+                                                                                                                            i]) * 100
+            for i, utilization in enumerate(utilization_data)]
         plt.plot(time_steps, chp_utilization, label='CHP', color='orange')
         plt.ylim(0, 100)
         plt.xlabel('Time Step')
@@ -409,7 +487,10 @@ def plot_results(results):
         plt.legend()
 
         plt.subplot(3, 2, 3)
-        em_utilization = [(utilization['electric_market']['electricity_output'] / demand_met_data[i]) * 100 for i, utilization in enumerate(utilization_data)]
+        em_utilization = [
+            (utilization['electric_market']['electricity_output'] / demand_met_data[i]) * 100 if isinstance(
+                utilization['electric_market'], dict) else (utilization['electric_market'] / demand_met_data[i]) * 100
+            for i, utilization in enumerate(utilization_data)]
         plt.plot(time_steps, em_utilization, label='Electric Market', color='cyan')
         plt.ylim(0, 100)
         plt.xlabel('Time Step')
@@ -418,7 +499,13 @@ def plot_results(results):
         plt.legend()
 
         plt.subplot(3, 2, 4)
-        pg_utilization = [(utilization['public_grid'][0] / demand_met_data[i]) * 100 for i, utilization in enumerate(utilization_data)]
+        pg_utilization = [
+            (utilization['public_grid'][0] / demand_met_data[i]) * 100 if isinstance(utilization['public_grid'],
+                                                                                     list) else (utilization[
+                                                                                                     'public_grid'] /
+                                                                                                 demand_met_data[
+                                                                                                     i]) * 100 for
+            i, utilization in enumerate(utilization_data)]
         plt.plot(time_steps, pg_utilization, label='Public Grid', color='purple')
         plt.ylim(0, 100)
         plt.xlabel('Time Step')
@@ -427,7 +514,10 @@ def plot_results(results):
         plt.legend()
 
         plt.subplot(3, 2, 5)
-        prior_purchased_utilization = [(utilization['prior_purchased'] / demand_met_data[i]) * 100 for i, utilization in enumerate(utilization_data)]
+        prior_purchased_utilization = [
+            (utilization['prior_purchased'] / demand_met_data[i]) * 100 if isinstance(utilization['prior_purchased'],
+                                                                                      (int, float)) else 0 for
+            i, utilization in enumerate(utilization_data)]
         plt.plot(time_steps, prior_purchased_utilization, label='Prior Purchased', color='pink')
         plt.ylim(0, 100)
         plt.xlabel('Time Step')
@@ -436,7 +526,10 @@ def plot_results(results):
         plt.legend()
 
         plt.subplot(3, 2, 6)
-        solar_utilization = [(utilization['solar_output'] / demand_met_data[i]) * 100 for i, utilization in enumerate(utilization_data)]
+        solar_utilization = [
+            (utilization['solar_output'] / demand_met_data[i]) * 100 if isinstance(utilization['solar_output'],
+                                                                                   (int, float)) else 0 for
+            i, utilization in enumerate(utilization_data)]
         plt.plot(time_steps, solar_utilization, label='Solar Output', color='lightgreen')
         plt.ylim(0, 100)
         plt.xlabel('Time Step')
@@ -447,11 +540,13 @@ def plot_results(results):
         plt.tight_layout()
         plt.show()
 
-        # Plot utilization graphs for units consumed separately
+        # Plot total units of energy used by each source
         plt.figure(figsize=(14, 10))
 
         plt.subplot(3, 2, 1)
-        battery_units = [utilization['battery'][0] for utilization in utilization_data]
+        battery_units = [
+            utilization['battery'][0] if isinstance(utilization['battery'], list) else utilization['battery'] for
+            utilization in utilization_data]
         plt.plot(time_steps, battery_units, label='Battery Units', color='yellow')
         plt.xlabel('Time Step')
         plt.ylabel('Battery Units')
@@ -459,7 +554,8 @@ def plot_results(results):
         plt.legend()
 
         plt.subplot(3, 2, 2)
-        chp_units = [utilization['chp'][0] for utilization in utilization_data]
+        chp_units = [utilization['chp'][0] if isinstance(utilization['chp'], list) else utilization['chp'] for
+                     utilization in utilization_data]
         plt.plot(time_steps, chp_units, label='CHP Units', color='orange')
         plt.xlabel('Time Step')
         plt.ylabel('CHP Units')
@@ -467,7 +563,9 @@ def plot_results(results):
         plt.legend()
 
         plt.subplot(3, 2, 3)
-        em_units = [utilization['electric_market']['electricity_output'] for utilization in utilization_data]
+        em_units = [utilization['electric_market']['electricity_output'] if isinstance(utilization['electric_market'],
+                                                                                       dict) else utilization[
+            'electric_market'] for utilization in utilization_data]
         plt.plot(time_steps, em_units, label='Electric Market Units', color='cyan')
         plt.xlabel('Time Step')
         plt.ylabel('Electric Market Units')
@@ -475,7 +573,8 @@ def plot_results(results):
         plt.legend()
 
         plt.subplot(3, 2, 4)
-        pg_units = [utilization['public_grid'][0] for utilization in utilization_data]
+        pg_units = [utilization['public_grid'][0] if isinstance(utilization['public_grid'], list) else utilization[
+            'public_grid'] for utilization in utilization_data]
         plt.plot(time_steps, pg_units, label='Public Grid Units', color='purple')
         plt.xlabel('Time Step')
         plt.ylabel('Public Grid Units')
@@ -483,7 +582,9 @@ def plot_results(results):
         plt.legend()
 
         plt.subplot(3, 2, 5)
-        prior_purchased_units = [utilization['prior_purchased'] for utilization in utilization_data]
+        prior_purchased_units = [
+            utilization['prior_purchased'] if isinstance(utilization['prior_purchased'], (int, float)) else 0 for
+            utilization in utilization_data]
         plt.plot(time_steps, prior_purchased_units, label='Prior Purchased Units', color='pink')
         plt.xlabel('Time Step')
         plt.ylabel('Prior Purchased Units')
@@ -491,13 +592,24 @@ def plot_results(results):
         plt.legend()
 
         plt.subplot(3, 2, 6)
-        solar_units = [utilization['solar_output'] for utilization in utilization_data]
+        solar_units = [utilization['solar_output'] if isinstance(utilization['solar_output'], (int, float)) else 0 for
+                       utilization in utilization_data]
         plt.plot(time_steps, solar_units, label='Solar Output Units', color='lightgreen')
         plt.xlabel('Time Step')
         plt.ylabel('Solar Output Units')
         plt.title(f'Solar Output Units Consumed over Time - {dataset_name}')
         plt.legend()
 
+        plt.tight_layout()
+        plt.show()
+
+        # Plot total demand units
+        plt.figure(figsize=(14, 5))
+        plt.plot(time_steps, demand_met_data, label='Total Demand Units', color='blue')
+        plt.xlabel('Time Step')
+        plt.ylabel('Total Demand Units')
+        plt.title(f'Total Demand Units over Time - {dataset_name}')
+        plt.legend()
         plt.tight_layout()
         plt.show()
 
@@ -511,16 +623,18 @@ def load_model(agent, filepath):
     agent.policy_net.eval()  # Set the model to evaluation mode
 
 
-# Save the model
-save_model(battery_solar_agent, 'battery_solar_agent.pth')
+# Save the models
+save_model(battery_agent, 'battery_agent.pth')
+save_model(solar_agent, 'solar_agent.pth')
 save_model(chp_market_agent, 'chp_market_agent.pth')
 
-# Load the model
-load_model(battery_solar_agent, 'battery_solar_agent.pth')
+# Load the models
+load_model(battery_agent, 'battery_agent.pth')
+load_model(solar_agent, 'solar_agent.pth')
 load_model(chp_market_agent, 'chp_market_agent.pth')
 
 # Test the model on multiple datasets
-results = test_model_on_multiple_datasets(battery_solar_agent, chp_market_agent, datasets, solarcost_kwh=0.1)
+results = test_model_on_multiple_datasets(battery_agent, solar_agent, chp_market_agent, datasets, solarcost_kwh=0.1)
 
 # Plot the results
 plot_results(results)
