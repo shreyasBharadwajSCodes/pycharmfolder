@@ -28,7 +28,7 @@ class RateManager:
 
         #print("Generated Rates:")
         #print(self.rate_df.head(20))  # Print the first 20 rows for verification
-        #self.save_to_excel('../../data/rate_schedule.xlsx')
+        self.save_to_excel(r'C:\Users\123sh\Documents\thesis\experiments\pycharmfolder\smart_grid_simulation\src\methods\rate_schedule.xlsx')
 
         return self.rate_df
 
