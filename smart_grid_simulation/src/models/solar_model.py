@@ -133,10 +133,12 @@ class SolarModel:
     def get_state(self, timestep):
         return [self.get_output(timestep)]
 
+    def reset(self):
+        self.mode = 'off'
+
+'''
     def calculate_cost_at_timestep(self, timestep):
         if self.mode == 'off':
             return 0
         return self.get_output(timestep) * self.cost_per_kwh
-
-    def reset(self):
-        self.mode = 'off'
+'''
