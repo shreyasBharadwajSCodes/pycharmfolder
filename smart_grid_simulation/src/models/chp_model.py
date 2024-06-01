@@ -23,7 +23,7 @@ class CHPModel:
         if self.is_off and self.current_time_step < self.turn_on_time:
             return 0
         if self.min_operational_value <= self.current_output <= self.max_operational_value:
-            return (self.current_output * self.cost_per_kwh_electricity / 60)
+            return (self.current_output * self.cost_per_kwh_electricity)
         return 0
 
     def get_state(self):
