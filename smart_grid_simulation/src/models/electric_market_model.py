@@ -82,9 +82,6 @@ class ElectricMarket:
     def reset(self):
         self.current_minute = 0
         self.purchased_units = [0] * ((len(self.rate_df) // 15) + 1)'''
-import pandas as pd
-
-import pandas as pd
 
 class ElectricMarket:
     def __init__(self, rate_df):
