@@ -244,8 +244,8 @@ if __name__ == "__main__":
     smart_grid_system = SmartGridSystem(sim_file=r'../../data/load_details/simulation_file_20240523_150250.xlsx',
                                         solar_file=r'../../data/solar_generated_02-05-2024_10_0.2.xlsx',
                                         solarcost_kwh=0.1)
-    max_timesteps = 1440  #1440 for full day
-    interval_length = 1440  # Shorter intervals for testing, e.g., 10 minutes
+    max_timesteps = 30  #1440 for full day
+    interval_length = 30  # Shorter intervals for testing, e.g., 10 minutes
 
     # Split the optimization into intervals
     intervals = [(smart_grid_system, i, min(i + interval_length, max_timesteps), 5, i) for i in range(0, max_timesteps, interval_length)]

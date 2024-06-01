@@ -4,8 +4,9 @@ class PriorPurchasedModel:
         self.electricity_per_minute = [per_of_prev * x for x in self.previous_demand]
         self.cost = cost
 
-    def get_price(self, used):
-        return self.cost * used
+    def get_price(self, timestep):
+        #change Included timestep in parameter
+        return self.cost * self.electricity_per_minute[timestep]
 
     def get_state(self, timestep):
         if timestep < len(self.electricity_per_minute):

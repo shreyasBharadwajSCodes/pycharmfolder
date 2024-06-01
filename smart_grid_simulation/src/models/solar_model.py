@@ -92,7 +92,7 @@ class SolarModel:
             return 0
 
         electricity_generated = self.solar_df.iloc[i]['Solar kw/min']
-        cost_per_minute = electricity_generated * self.cost_per_kwh / 60
+        cost_per_minute = electricity_generated * self.cost_per_kwh
         return math.ceil(cost_per_minute)
 
     def generate_solar_data_excel(self, solar_parameters: dict, path='../data/solar_generated'):
