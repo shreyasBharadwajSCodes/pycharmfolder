@@ -1,6 +1,6 @@
 # clear_log.py
 
-log_file_path = ['optimization.log','SA_log.log','smart_grid.log']
+log_file_path = ['Ans_optimization.log','SA_log.log','Rl_smart_grid.log']
 
 # Open the log file in write mode to clear its contents
 for log_file in log_file_path:

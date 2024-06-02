@@ -7,7 +7,7 @@ from multiprocessing import Pool, Manager
 from smart_grid_simulation.src.models.smart_grid_system import SmartGridSystem
 
 # Configure logging
-logging.basicConfig(filename='../logs/optimization.log', level=logging.INFO)
+logging.basicConfig(filename='Ans_optimization.log', level=logging.INFO)
 
 # Load rate schedule
 rate_df = pd.read_excel('rate_schedule.xlsx')

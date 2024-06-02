@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 from models.smart_grid_system import SmartGridSystem
 
 # Configure logging
-logging.basicConfig(filename='smart_grid.log', level=logging.INFO, format='%(asctime)s %(message)s')
+logging.basicConfig(filename='Rl_smart_grid.log', level=logging.INFO, format='%(asctime)s %(message)s')
 
 # PPOAgent Class
 class PPOAgent:
