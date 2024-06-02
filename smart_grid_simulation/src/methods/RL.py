@@ -322,7 +322,7 @@ gamma = 0.90
 epsilon = 0.2
 beta = 0.02
 num_episodes = 10
-max_timesteps = 1441
+max_timesteps = 700
 battery_agent = PPOAgent(DiscretePolicyNetwork(state_dim, battery_action_dim), lr, gamma, epsilon, beta)
 market_agent = PPOAgent(DiscretePolicyNetwork(state_dim, market_action_dim), lr, gamma, epsilon, beta)
 
