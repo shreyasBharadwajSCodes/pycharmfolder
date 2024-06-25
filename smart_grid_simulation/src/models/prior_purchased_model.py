@@ -1,5 +1,5 @@
 class PriorPurchasedModel:
-    def __init__(self, previous_demand, cost=3, per_of_prev=0.03):
+    def __init__(self, previous_demand, cost=3, per_of_prev=0.5):
         self.previous_demand = list(previous_demand)
         self.electricity_per_minute = [per_of_prev * x for x in self.previous_demand]
         self.cost = cost

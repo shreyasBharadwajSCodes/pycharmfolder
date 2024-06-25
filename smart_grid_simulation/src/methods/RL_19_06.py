@@ -1,4 +1,3 @@
-import pandas as pd
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -372,7 +371,7 @@ gamma = 0.90
 epsilon = 0.2
 beta = 0.02
 num_episodes = 10
-max_timesteps = 100
+max_timesteps = 1441
 
 battery_agent = PPOAgent(DiscretePolicyNetwork(state_dim, battery_action_dim), lr, gamma, epsilon, beta)
 market_agent = PPOAgent(DiscretePolicyNetwork(state_dim, market_action_dim), lr, gamma, epsilon, beta)
@@ -392,7 +391,6 @@ end_time = time.time()
 logging.info(f"Finished execution in {end_time - start_time} seconds")
 print(f"Finished execution in {end_time - start_time} seconds")
 
-
 def visualize_results(results):
     for dataset_name, data in results.items():
         utilization_data = data['utilization_data']
@@ -408,15 +406,18 @@ def visualize_results(results):
         percentage_demand_satisfied = [(sum([
             utilization['battery'][0] if isinstance(utilization['battery'], list) else utilization['battery'],
             utilization['chp'][0] if isinstance(utilization['chp'], list) else utilization['chp'],
-            utilization['electric_market']['electricity_output'] if isinstance(utilization['electric_market'], dict) else utilization['electric_market'],
+            utilization['electric_market']['electricity_output'] if isinstance(utilization['electric_market'],
+                                                                               dict) else utilization[
+                'electric_market'],
             utilization['prior_purchased'] if isinstance(utilization['prior_purchased'], (int, float)) else 0,
             utilization['solar_output'] if isinstance(utilization['solar_output'], (int, float)) else 0
         ]) / demand_met_data[i]) * 100 for i, utilization in enumerate(utilization_data)]
         plt.subplot(2, 2, 1)
-        plt.plot(time_steps, percentage_demand_satisfied, label='% Demand Satisfied', color='blue')
+        plt.plot(time_steps, percentage_demand_satisfied, label='% Demand Satisfied by Non-Public Grid Sources',
+                 color='blue')
         plt.xlabel('Time Step')
         plt.ylabel('% Demand Satisfied')
-        plt.title(f'% Demand Satisfied - {dataset_name}')
+        plt.title(f'% Demand Satisfied by Non-Public Grid Sources - {dataset_name}')
         plt.legend()
 
         # Plot Reward
@@ -443,7 +444,11 @@ def visualize_results(results):
 
         plt.subplot(3, 2, 1)
         battery_utilization = [
-            (utilization['battery'][0] / demand_met_data[i]) * 100 if isinstance(utilization['battery'], list) else (utilization['battery'] / demand_met_data[i]) * 100
+            (utilization['battery'][0] / demand_met_data[i]) * 100 if isinstance(utilization['battery'], list) else (
+                                                                                                                                utilization[
+                                                                                                                                    'battery'] /
+                                                                                                                                demand_met_data[
+                                                                                                                                    i]) * 100
             for i, utilization in enumerate(utilization_data)]
         plt.plot(time_steps, battery_utilization, label='Battery', color='yellow')
         plt.ylim(0, 100)
@@ -454,7 +459,11 @@ def visualize_results(results):
 
         plt.subplot(3, 2, 2)
         chp_utilization = [
-            (utilization['chp'][0] / demand_met_data[i]) * 100 if isinstance(utilization['chp'], list) else (utilization['chp'] / demand_met_data[i]) * 100
+            (utilization['chp'][0] / demand_met_data[i]) * 100 if isinstance(utilization['chp'], list) else (
+                                                                                                                        utilization[
+                                                                                                                            'chp'] /
+                                                                                                                        demand_met_data[
+                                                                                                                            i]) * 100
             for i, utilization in enumerate(utilization_data)]
         plt.plot(time_steps, chp_utilization, label='CHP', color='orange')
         plt.ylim(0, 100)
@@ -465,7 +474,8 @@ def visualize_results(results):
 
         plt.subplot(3, 2, 3)
         em_utilization = [
-            (utilization['electric_market']['electricity_output'] / demand_met_data[i]) * 100 if isinstance(utilization['electric_market'], dict) else (utilization['electric_market'] / demand_met_data[i]) * 100
+            (utilization['electric_market']['electricity_output'] / demand_met_data[i]) * 100 if isinstance(
+                utilization['electric_market'], dict) else (utilization['electric_market'] / demand_met_data[i]) * 100
             for i, utilization in enumerate(utilization_data)]
         plt.plot(time_steps, em_utilization, label='Electric Market', color='cyan')
         plt.ylim(0, 100)
@@ -475,18 +485,10 @@ def visualize_results(results):
         plt.legend()
 
         plt.subplot(3, 2, 4)
-        pg_utilization = [
-            (utilization['public_grid'][0] / demand_met_data[i]) * 100 if isinstance(utilization['public_grid'], list) else (utilization['public_grid'] / demand_met_data[i]) * 100 for i, utilization in enumerate(utilization_data)]
-        plt.plot(time_steps, pg_utilization, label='Public Grid', color='purple')
-        plt.ylim(0, 100)
-        plt.xlabel('Time Step')
-        plt.ylabel('Public Grid Utilization (%)')
-        plt.title(f'Public Grid Utilization over Time - {dataset_name}')
-        plt.legend()
-
-        plt.subplot(3, 2, 5)
         prior_purchased_utilization = [
-            (utilization['prior_purchased'] / demand_met_data[i]) * 100 if isinstance(utilization['prior_purchased'], (int, float)) else 0 for i, utilization in enumerate(utilization_data)]
+            (utilization['prior_purchased'] / demand_met_data[i]) * 100 if isinstance(utilization['prior_purchased'],
+                                                                                      (int, float)) else 0 for
+            i, utilization in enumerate(utilization_data)]
         plt.plot(time_steps, prior_purchased_utilization, label='Prior Purchased', color='pink')
         plt.ylim(0, 100)
         plt.xlabel('Time Step')
@@ -494,9 +496,11 @@ def visualize_results(results):
         plt.title(f'Prior Purchased Utilization over Time - {dataset_name}')
         plt.legend()
 
-        plt.subplot(3, 2, 6)
+        plt.subplot(3, 2, 5)
         solar_utilization = [
-            (utilization['solar_output'] / demand_met_data[i]) * 100 if isinstance(utilization['solar_output'], (int, float)) else 0 for i, utilization in enumerate(utilization_data)]
+            (utilization['solar_output'] / demand_met_data[i]) * 100 if isinstance(utilization['solar_output'],
+                                                                                   (int, float)) else 0 for
+            i, utilization in enumerate(utilization_data)]
         plt.plot(time_steps, solar_utilization, label='Solar Output', color='lightgreen')
         plt.ylim(0, 100)
         plt.xlabel('Time Step')
@@ -512,7 +516,8 @@ def visualize_results(results):
 
         plt.subplot(3, 2, 1)
         battery_units = [
-            utilization['battery'][0] if isinstance(utilization['battery'], list) else utilization['battery'] for utilization in utilization_data]
+            utilization['battery'][0] if isinstance(utilization['battery'], list) else utilization['battery'] for
+            utilization in utilization_data]
         plt.plot(time_steps, battery_units, label='Battery Units', color='yellow')
         plt.xlabel('Time Step')
         plt.ylabel('Battery Units')
@@ -520,8 +525,8 @@ def visualize_results(results):
         plt.legend()
 
         plt.subplot(3, 2, 2)
-        chp_units = [
-            utilization['chp'][0] if isinstance(utilization['chp'], list) else utilization['chp'] for utilization in utilization_data]
+        chp_units = [utilization['chp'][0] if isinstance(utilization['chp'], list) else utilization['chp'] for
+                     utilization in utilization_data]
         plt.plot(time_steps, chp_units, label='CHP Units', color='orange')
         plt.xlabel('Time Step')
         plt.ylabel('CHP Units')
@@ -529,8 +534,9 @@ def visualize_results(results):
         plt.legend()
 
         plt.subplot(3, 2, 3)
-        em_units = [
-            utilization['electric_market']['electricity_output'] if isinstance(utilization['electric_market'], dict) else utilization['electric_market'] for utilization in utilization_data]
+        em_units = [utilization['electric_market']['electricity_output'] if isinstance(utilization['electric_market'],
+                                                                                       dict) else utilization[
+            'electric_market'] for utilization in utilization_data]
         plt.plot(time_steps, em_units, label='Electric Market Units', color='cyan')
         plt.xlabel('Time Step')
         plt.ylabel('Electric Market Units')
@@ -538,26 +544,18 @@ def visualize_results(results):
         plt.legend()
 
         plt.subplot(3, 2, 4)
-        pg_units = [
-            (utilization['public_grid'][0] / 10) if isinstance(utilization['public_grid'], list) else (utilization['public_grid'] / 10) for utilization in utilization_data]
-        plt.plot(time_steps, pg_units, label='Public Grid Units', color='purple')
-        plt.xlabel('Time Step')
-        plt.ylabel('Public Grid Units')
-        plt.title(f'Public Grid Units Consumed over Time - {dataset_name}')
-        plt.legend()
-
-        plt.subplot(3, 2, 5)
         prior_purchased_units = [
-            utilization['prior_purchased'] if isinstance(utilization['prior_purchased'], (int, float)) else 0 for utilization in utilization_data]
+            utilization['prior_purchased'] if isinstance(utilization['prior_purchased'], (int, float)) else 0 for
+            utilization in utilization_data]
         plt.plot(time_steps, prior_purchased_units, label='Prior Purchased Units', color='pink')
         plt.xlabel('Time Step')
         plt.ylabel('Prior Purchased Units')
         plt.title(f'Prior Purchased Units Consumed over Time - {dataset_name}')
         plt.legend()
 
-        plt.subplot(3, 2, 6)
-        solar_units = [
-            utilization['solar_output'] if isinstance(utilization['solar_output'], (int, float)) else 0 for utilization in utilization_data]
+        plt.subplot(3, 2, 5)
+        solar_units = [utilization['solar_output'] if isinstance(utilization['solar_output'], (int, float)) else 0 for
+                       utilization in utilization_data]
         plt.plot(time_steps, solar_units, label='Solar Output Units', color='lightgreen')
         plt.xlabel('Time Step')
         plt.ylabel('Solar Output Units')
@@ -577,47 +575,5 @@ def visualize_results(results):
         plt.tight_layout()
         plt.show()
 
-        # Plot optimal solution costs over time
-        battery_costs = []
-        chp_costs = []
-        em_costs = []
-        prior_purchased_costs = []
-        solar_costs = []
-        public_grid_costs = []
-
-        for utilization in utilization_data:
-            battery_costs.append(utilization['battery'][1] if isinstance(utilization['battery'], list) else 0)
-            chp_costs.append(utilization['chp'][1] if isinstance(utilization['chp'], list) else 0)
-            em_costs.append(utilization['electric_market']['electricity_output'] * utilization['electric_market']['price'] if 'price' in utilization['electric_market'] else 0)
-            prior_purchased_costs.append(utilization['prior_purchased'] if isinstance(utilization['prior_purchased'], (int, float)) else 0)
-            solar_costs.append(utilization['solar_output'][1] if isinstance(utilization['solar_output'], list) and len(utilization['solar_output']) > 1 else 0)
-            public_grid_costs.append((utilization['public_grid'][0] / 10) if isinstance(utilization['public_grid'], list) else (utilization['public_grid'] / 10))
-
-        # Store the costs into an Excel file
-        df_costs = pd.DataFrame({
-            'Time Step': time_steps,
-            'Battery Costs': battery_costs,
-            'CHP Costs': chp_costs,
-            'Electric Market Costs': em_costs,
-            'Prior Purchased Costs': prior_purchased_costs,
-            'Solar Costs': solar_costs,
-            'Public Grid Costs': public_grid_costs
-        })
-        df_costs.to_excel(f'{dataset_name}_optimal_solution_costs.xlsx', index=False)
-
-        # Plot optimal solution costs over time
-        plt.figure(figsize=(14, 8))
-        plt.plot(time_steps, battery_costs, label='Battery Costs', color='yellow', linewidth=2)
-        plt.plot(time_steps, chp_costs, label='CHP Costs', color='orange', linewidth=2)
-        plt.plot(time_steps, em_costs, label='Electric Market Costs', color='cyan', linewidth=2)
-        plt.plot(time_steps, prior_purchased_costs, label='Prior Purchased Costs', color='pink', linewidth=2)
-        plt.plot(time_steps, solar_costs, label='Solar Costs', color='lightgreen', linewidth=2)
-        plt.plot(time_steps, public_grid_costs, label='Public Grid Costs (divided by 10)', color='purple', linewidth=2)
-        plt.xlabel('Time Step', fontsize=14)
-        plt.ylabel('Costs', fontsize=14)
-        plt.title(f'Optimal Solution Costs over Time - {dataset_name}', fontsize=16)
-        plt.legend(fontsize=12)
-        plt.tight_layout()
-        plt.show()# Visualize the results
-
+# Visualize the results
 visualize_results(results)

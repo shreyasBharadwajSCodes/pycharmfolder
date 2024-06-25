@@ -177,6 +177,10 @@ def plot_graphs(actions, smart_grid_system):
 
         total_costs.append(state['total_cost'])
 
+    # Save total costs over time to an Excel file
+    total_cost_df = pd.DataFrame({'Time Step': time_steps, 'Total Cost': total_costs})
+    total_cost_df.to_excel('total_cost_over_time.xlsx', index=False)
+
     plt.figure(figsize=(20, 25))
 
     plt.subplot(5, 1, 1)
@@ -218,7 +222,7 @@ def plot_graphs(actions, smart_grid_system):
     plt.legend()
 
     plt.tight_layout()
-    plt.savefig('smart_grid_optimization_results.png')
+    plt.savefig('smart_grid_optimization_results.pdf')
 
 def distribute_procurement(actions):
     billing_interval = 15  # minutes

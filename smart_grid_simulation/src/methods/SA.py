@@ -2,11 +2,13 @@ import random
 import math
 import logging
 import matplotlib.pyplot as plt
+import csv
 
 from models.smart_grid_system import SmartGridSystem
 
 # Setup logging
 logging.basicConfig(filename='SA_log.log', level=logging.INFO, format='%(asctime)s - %(message)s')
+
 
 def energy_function(allocation, smart_grid):
     total_cost = 0
@@ -15,6 +17,10 @@ def energy_function(allocation, smart_grid):
         smart_grid.time_step = minute
         solar_value = smart_grid.final_df['Solar kw/min'].iloc[minute] if usage['solar'] > 0 else 0
         battery_value = smart_grid.battery.discharge(is_zero=1) if usage['battery']['mode'] == 'discharge' else 0
+        if usage['battery']['mode'] == 'charge':
+            smart_grid.battery.charge(solar_value)
+            battery_value = 0  # Battery charging consumes solar energy
+
         utility_market_value = usage['utility_market']
         prior_purchased_value = smart_grid.ppm.get_state(minute)
         chp_value = usage['chp']
@@ -22,8 +28,8 @@ def energy_function(allocation, smart_grid):
 
         # Calculate total supply
         total_supply = (
-            solar_value + battery_value + utility_market_value +
-            prior_purchased_value + chp_value + public_grid_value
+                solar_value + battery_value + utility_market_value +
+                prior_purchased_value + chp_value + public_grid_value
         )
 
         total_demand = smart_grid.final_df['Total_current_demand'].iloc[minute]
@@ -34,18 +40,19 @@ def energy_function(allocation, smart_grid):
 
         # Calculate costs for each source
         solar_cost = solar_value * smart_grid.solar_model.calculate_cost_at_timestep(minute)
-        battery_cost = smart_grid.battery.get_cost()
+        battery_cost = smart_grid.battery.get_cost() if usage['battery']['mode'] == 'discharge' else 0
         utility_market_cost = utility_market_value * smart_grid.em.get_price(minute)
         prior_purchased_cost = smart_grid.ppm.get_price(minute)
         chp_cost = smart_grid.chp.calculate_cost_at_current_step()
         public_grid_cost = smart_grid.pg.get_price(public_grid_value, total_demand)
 
         total_cost += (
-            solar_cost + battery_cost + utility_market_cost +
-            prior_purchased_cost + chp_cost + public_grid_cost
+                solar_cost + battery_cost + utility_market_cost +
+                prior_purchased_cost + chp_cost + public_grid_cost
         )
 
     return total_cost
+
 
 def neighbor_function(current_allocation, smart_grid):
     new_allocation = current_allocation.copy()
@@ -55,7 +62,7 @@ def neighbor_function(current_allocation, smart_grid):
     if source == "solar":
         # Set to 0 or the fixed value from final_df['Solar kw/min']
         new_allocation[minute][source] = 0 if new_allocation[minute][source] > 0 else \
-        smart_grid.final_df['Solar kw/min'].iloc[minute]
+            smart_grid.final_df['Solar kw/min'].iloc[minute]
     elif source == "battery":
         current_mode = new_allocation[minute][source]['mode']
         new_mode = random.choice(['idle', 'charge', 'discharge'])
@@ -96,6 +103,7 @@ def neighbor_function(current_allocation, smart_grid):
         new_allocation[minute][source] = random.uniform(max(0, current_value - 0.1), min(2, current_value + 0.1))
     return new_allocation
 
+
 def simulated_annealing(initial_solution, smart_grid, initial_temperature, cooling_rate, min_temperature, timesteps):
     current_solution = initial_solution
     current_energy = energy_function(current_solution, smart_grid)
@@ -122,6 +130,7 @@ def simulated_annealing(initial_solution, smart_grid, initial_temperature, cooli
                 break
 
     return current_solution, current_energy
+
 
 # Function to run the simulation for a specified number of timesteps
 def run_simulation(timesteps=1440, sim_file='../../data/load_details/simulation_file_20240523_150402.xlsx',
@@ -153,12 +162,13 @@ def run_simulation(timesteps=1440, sim_file='../../data/load_details/simulation_
 
     logging.info(f'Best Solution: {best_solution}')
     logging.info(f'Best Cost: {best_cost}')
-    #print("Best Solution:", best_solution)
-    #print("Best Cost:", best_cost)
+    print("Best Solution:", best_solution)
+    print("Best Cost:", best_cost)
 
-    plot_results(best_solution, smart_grid)
+    plot_results(best_solution, smart_grid, 'cumulative_costs.csv')
 
-def plot_results(best_solution, smart_grid):
+
+def plot_results(best_solution, smart_grid, output_file):
     # Extract data from best_solution
     time_steps = list(best_solution.keys())
     solar_usage = [best_solution[t]['solar'] for t in time_steps]
@@ -177,16 +187,33 @@ def plot_results(best_solution, smart_grid):
         solar_cost + battery_cost + utility_market_cost + prior_purchased_cost + chp_cost + public_grid_cost
         for solar_cost, battery_cost, utility_market_cost, prior_purchased_cost, chp_cost, public_grid_cost
         in zip(
-            solar_usage, battery_usage, utility_market_usage, prior_purchased_usage, chp_usage, public_grid_usage
+            [usage * smart_grid.solar_model.calculate_cost_at_timestep(t) for t, usage in zip(time_steps, solar_usage)],
+            [smart_grid.battery.get_cost() if best_solution[t]['battery']['mode'] == 'discharge' else 0 for t in
+             time_steps],
+            [usage * smart_grid.em.get_price(t) for t, usage in zip(time_steps, utility_market_usage)],
+            [smart_grid.ppm.get_price(t) for t in time_steps],
+            [smart_grid.chp.calculate_cost_at_current_step() for _ in time_steps],
+            [smart_grid.pg.get_price(usage, smart_grid.final_df['Total_current_demand'].iloc[t]) for t, usage in
+             zip(time_steps, public_grid_usage)]
         )
     ]
 
+    # Calculate cumulative sum of total costs
+    cumulative_cost = [sum(total_cost[:i + 1]) for i in range(len(total_cost))]
+
+    # Save cumulative costs to CSV file
+    with open(output_file, mode='w', newline='') as file:
+        writer = csv.writer(file)
+        writer.writerow(['Time (minutes)', 'Cumulative Cost'])
+        for t, cost in zip(time_steps, cumulative_cost):
+            writer.writerow([t, cost])
+
     # Plot Total Cost Over Time
     plt.figure(figsize=(12, 8))
-    plt.plot(time_steps, total_cost, label='Total Cost')
+    plt.plot(time_steps, cumulative_cost, label='Cumulative Cost')
     plt.xlabel('Time (minutes)')
-    plt.ylabel('Cost')
-    plt.title('Total Cost Over Time')
+    plt.ylabel('Cumulative Cost')
+    plt.title('Cumulative Cost Over Time')
     plt.legend()
     plt.grid(True)
     plt.show()
@@ -239,6 +266,6 @@ def plot_results(best_solution, smart_grid):
 
     plt.show()
 
-# Example usage:
+
 # Run the simulation for 1440 timesteps
 run_simulation(timesteps=1440)
